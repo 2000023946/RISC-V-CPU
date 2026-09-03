@@ -17,6 +17,34 @@ module cpu_run_tb;
 
     always #5 clk = ~clk;
 
+    // ============================================================
+    // BENCHMARK COUNTERS
+    // ============================================================
+    
+    integer cycles_count;
+    integer stall_count;
+    integer flush_count;
+    integer retired_inst_count;
+
+    always @(posedge clk) begin
+        if (!reset) begin
+            cycles_count = cycles_count + 1;
+            
+            if (dut.stall) begin
+                stall_count = stall_count + 1;
+            end
+            
+            if (dut.flush) begin
+                flush_count = flush_count + 1;
+            end
+            
+            // Count instructions dynamically as they exit the pipeline
+            if (dut.mem_wb_valid) begin
+                retired_inst_count = retired_inst_count + 1;
+            end
+        end
+    end
+
 
     // ============================================================
     // REGISTER NAME
@@ -431,6 +459,11 @@ module cpu_run_tb;
 
         clk = 1'b0;
         reset = 1'b1;
+        
+        cycles_count = 0;
+        stall_count = 0;
+        flush_count = 0;
+        retired_inst_count = 0;
 
         // Initialize memory array.
         for (i = 0; i < 256; i = i + 1) begin
@@ -483,7 +516,10 @@ module cpu_run_tb;
             // Allow register writeback / sequential logic to settle.
             #1;
 
-            // Print relevant result.
+            // Note: In a pipelined CPU, the result won't be ready in the 
+            // register file until 4 clock cycles later! This printout shows 
+            // the register value immediately after fetch, which is why it 
+            // prints 0x00000000.
             case (trace_instruction[6:0])
 
                 // R-type
@@ -554,24 +590,43 @@ module cpu_run_tb;
         // Finished
         // ========================================================
 
-        if (instruction_count >= 1000) begin
+        // Wait 5 clock cycles to let the final instructions drain out 
+        // of the ID, EX, MEM, and WB stages!
+        repeat(5) @(posedge clk);
+        #1;
 
+        if (instruction_count >= 1000) begin
             $display("==================================================");
             $display("WARNING: Reached 1000 instruction limit.");
             $display("Possible infinite loop.");
             $display("==================================================");
-
         end
         else begin
-
             $display("==================================================");
             $display("             PROGRAM FINISHED");
             $display("==================================================");
-            $display("Instructions executed: %0d", instruction_count);
+            $display("Instructions Fetched: %0d", instruction_count);
             $display("Final PC: 0x%08h", dut.current_pc);
-            $display("==================================================");
-
         end
+        
+        
+        // ========================================================
+        // BENCHMARK METRICS
+        // ========================================================
+
+        $display("");
+        $display("========================================");
+        $display("           BENCHMARK RESULTS            ");
+        $display("========================================");
+        $display("Cycles Executed:       %0d", cycles_count);
+        $display("Instructions Retired:  %0d", retired_inst_count);
+        $display("Pipeline Stalls:       %0d", stall_count);
+        $display("Pipeline Flushes:      %0d", flush_count);
+        
+        if (retired_inst_count > 0) begin
+            $display("CPI (Cycles/Inst):     %f", (cycles_count * 1.0) / retired_inst_count);
+        end
+        $display("========================================");
 
         $finish;
 

@@ -186,26 +186,6 @@ module cpu(
     // ============================================================
     // STALL / LOAD-USE HAZARD DETECTION
     // ============================================================
-    //
-    // Current instruction:
-    //     rs1 / rs2
-    //
-    // Previous instruction in ID/EX:
-    //     id_ex_rd
-    //     id_ex_memory_op
-    //
-    // If the ID/EX instruction is a load and the current
-    // instruction needs the value being loaded:
-    //
-    //     stall = 1
-    //
-    // This causes:
-    //
-    //     PC      -> HOLD
-    //     IF/ID   -> HOLD
-    //     ID/EX   -> BUBBLE
-    //
-    // ============================================================
 
     stall_unit cpu_stall_unit(
         .rs1(rs1),
@@ -268,11 +248,6 @@ module cpu(
         .pc_mux_select_out(id_ex_pc_mux_select),
         .writeback_select_out(id_ex_writeback_select)
     );
-
-
-    // ============================================================
-    // EX STAGE
-    // ============================================================
 
 
     // ============================================================
@@ -444,6 +419,15 @@ module cpu(
 
 
     // ============================================================
+    // TRUE SEQUENTIAL PC (FETCH STAGE)
+    // ============================================================
+    // We calculate the next PC from the actual Fetch stage, not EX.
+    
+    logic [31:0] true_next_pc;
+    assign true_next_pc = current_pc + 32'd4;
+
+
+    // ============================================================
     // BRANCH MUX
     // ============================================================
 
@@ -451,7 +435,7 @@ module cpu(
 
 
     branch_mux cpu_branch_mux(
-        .pc_plus_4(pc_plus_4),
+        .pc_plus_4(true_next_pc),       // <-- FIX: Using Fetch stage PC+4
 
         .branch_target(branch_target),
 
@@ -466,7 +450,7 @@ module cpu(
     // ============================================================
 
     pc_mux cpu_pc_mux(
-        .pc_plus_4(pc_plus_4),
+        .pc_plus_4(true_next_pc),       // <-- FIX: Using Fetch stage PC+4
 
         .branch_target(branch_next_pc),
 
@@ -613,21 +597,49 @@ module cpu(
         .write_data(writeback_write_data)
     );
 
-    always @(posedge clk) begin
-    if (!reset) begin
-        $display(
-            "PC=%h | IFID_PC=%h | IDEX_PC=%h | INST=%h | branch_taken=%b | branch_target=%h | branch_next_pc=%h | next_pc=%h | flush=%b",
-            current_pc,
-            if_id_pc,
-            id_ex_pc,
-            if_id_instruction,
-            branch_taken,
-            branch_target,
-            branch_next_pc,
-            next_pc,
-            flush
-        );
-    end
-end
+
+    // ============================================================
+    // PIPELINE VALID BITS
+    // ============================================================
+
+    logic if_id_valid;
+    logic id_ex_valid;
+    logic ex_mem_valid;
+    logic mem_wb_valid;
+
+    pipeline_valid_registers cpu_valid_registers(
+        .clk(clk),
+        .reset(reset),
+        .stall(stall),
+        .flush(flush),
+        
+        .if_id_valid(if_id_valid),
+        .id_ex_valid(id_ex_valid),
+        .ex_mem_valid(ex_mem_valid),
+        .mem_wb_valid(mem_wb_valid)
+    );
+
+
+    // ============================================================
+    // DEBUG OUTPUT
+    // ============================================================
+
+    cpu_debug_monitor cpu_debugger(
+        .clk(clk),
+        .reset(reset),
+        
+        .current_pc(current_pc),
+        .if_id_pc(if_id_pc),
+        .id_ex_pc(id_ex_pc),
+        .if_id_instruction(if_id_instruction),
+        
+        .if_id_valid(if_id_valid),
+        .id_ex_valid(id_ex_valid),
+        .ex_mem_valid(ex_mem_valid),
+        .mem_wb_valid(mem_wb_valid),
+        
+        .stall(stall),
+        .flush(flush)
+    );
 
 endmodule
