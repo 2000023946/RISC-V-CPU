@@ -5,10 +5,11 @@ module cpu(
 );
 
     // ============================================================
-    // STALL CONTROL
+    // STALL / FLUSH CONTROL
     // ============================================================
 
     logic stall;
+    logic flush;
 
 
     // ============================================================
@@ -59,6 +60,7 @@ module cpu(
         .clk(clk),
         .reset(reset),
         .stall(stall),
+        .flush(flush),
 
         .pc_in(current_pc),
         .instruction_in(instruction),
@@ -224,6 +226,7 @@ module cpu(
         .clk(clk),
         .reset(reset),
         .stall(stall),
+        .flush(flush),
 
         .pc_in(if_id_pc),
 
@@ -478,6 +481,17 @@ module cpu(
 
 
     // ============================================================
+    // FLUSH CONTROL
+    // ============================================================
+
+    flush_unit cpu_flush_unit(
+        .branch_taken(branch_taken),
+        .pc_mux_select(id_ex_pc_mux_select),
+        .flush(flush)
+    );
+
+
+    // ============================================================
     // EX/MEM PIPELINE REGISTER
     // ============================================================
 
@@ -598,5 +612,22 @@ module cpu(
 
         .write_data(writeback_write_data)
     );
+
+    always @(posedge clk) begin
+    if (!reset) begin
+        $display(
+            "PC=%h | IFID_PC=%h | IDEX_PC=%h | INST=%h | branch_taken=%b | branch_target=%h | branch_next_pc=%h | next_pc=%h | flush=%b",
+            current_pc,
+            if_id_pc,
+            id_ex_pc,
+            if_id_instruction,
+            branch_taken,
+            branch_target,
+            branch_next_pc,
+            next_pc,
+            flush
+        );
+    end
+end
 
 endmodule

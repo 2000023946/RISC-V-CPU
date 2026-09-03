@@ -1,20 +1,19 @@
+
 module id_ex_register(
     input logic        clk,
     input logic        reset,
     input logic        stall,
+    input logic        flush,
 
-    // Data from ID stage
     input logic [31:0] pc_in,
     input logic [31:0] register_value_1_in,
     input logic [31:0] register_value_2_in,
     input logic [31:0] immediate_in,
 
-    // Register numbers
     input logic [4:0] rs1_in,
     input logic [4:0] rs2_in,
     input logic [4:0] rd_in,
 
-    // Control signals
     input logic [3:0] alu_op_in,
     input logic [3:0] memory_op_in,
     input logic [2:0] branch_type_in,
@@ -24,7 +23,6 @@ module id_ex_register(
     input logic [1:0] pc_mux_select_in,
     input logic [1:0] writeback_select_in,
 
-    // Outputs to EX stage
     output logic [31:0] pc_out,
     output logic [31:0] register_value_1_out,
     output logic [31:0] register_value_2_out,
@@ -44,10 +42,14 @@ module id_ex_register(
     output logic [1:0] writeback_select_out
 );
 
-    // Memory operation encoding
     localparam logic [3:0] MEM_NONE = 4'd8;
 
+
     always_ff @(posedge clk) begin
+
+        // ========================================================
+        // RESET
+        // ========================================================
 
         if (reset) begin
 
@@ -68,12 +70,24 @@ module id_ex_register(
             alu_mux_select_out        <= 1'b0;
             pc_mux_select_out         <= 2'b0;
             writeback_select_out      <= 2'b0;
-
         end
 
-        else if (stall) begin
 
-            // Insert a bubble into ID/EX
+        // ========================================================
+        // STALL OR FLUSH
+        // ========================================================
+        //
+        // Both conditions insert a bubble into ID/EX.
+        //
+        // STALL:
+        //   load-use hazard
+        //
+        // FLUSH:
+        //   control hazard
+        //
+        // ========================================================
+
+        else if (stall || flush) begin
 
             pc_out                    <= 32'b0;
             register_value_1_out      <= 32'b0;
@@ -92,12 +106,14 @@ module id_ex_register(
             alu_mux_select_out        <= 1'b0;
             pc_mux_select_out         <= 2'b0;
             writeback_select_out      <= 2'b0;
-
         end
 
-        else begin
 
-            // Normal operation: capture ID stage
+        // ========================================================
+        // NORMAL TRANSFER
+        // ========================================================
+
+        else begin
 
             pc_out                    <= pc_in;
             register_value_1_out      <= register_value_1_in;
@@ -116,7 +132,6 @@ module id_ex_register(
             alu_mux_select_out        <= alu_mux_select_in;
             pc_mux_select_out         <= pc_mux_select_in;
             writeback_select_out      <= writeback_select_in;
-
         end
 
     end
