@@ -1,48 +1,54 @@
+
 # RISC-V CPU in SystemVerilog
 
-A from-scratch **RV32I single-cycle RISC-V processor** implemented in SystemVerilog. The CPU is built from individual modules for the ALU, register file, instruction decoder, immediate generator, program counter, memory, branching, jumps, and writeback logic.
+A from-scratch **RV32I single-cycle RISC-V processor** implemented in SystemVerilog.
 
-Each major component has its own testbench, and the components are integrated into a complete CPU capable of executing RISC-V assembly programs.
+The CPU is built from modular components including the ALU, register file, decoder, immediate generator, program counter, memory, branching, jumps, and writeback logic. Each component has its own testbench.
 
-The project also includes a Python runner that automatically assembles an `.s` file into machine code, generates `program.mem`, compiles the SystemVerilog CPU, and runs the simulation with an instruction-by-instruction execution trace.
+The project also includes a Python runner for executing RISC-V assembly programs through the CPU.
 
-## Running
-
-Activate the virtual environment:
+## Run
 
 ```bash
 source venv/bin/activate
-```
-
-Install the Python dependency:
-
-```bash
 pip install -r requirements.txt
-```
-
-Run an assembly program:
-
-```bash
 python3 run.py program.s
 ```
 
 The assembly file can have any name:
 
 ```bash
-python3 run.py program.s
+python3 run.py fibonacci.s
 ```
 
-The Python script automatically:
+The runner assembles the program, generates `program.mem`, compiles the CPU, and runs the simulation.
 
-1. Assembles the RISC-V program.
-2. Generates `program.mem`.
-3. Compiles the SystemVerilog CPU using Icarus Verilog.
-4. Runs the simulation with VVP.
-5. Prints the CPU execution trace.
+## CPU Tests
+
+From the `cpu/` directory:
+
+```bash
+./test.sh decoder
+```
+
+Test an individual module.
+
+```bash
+./test_all.sh
+```
+
+Run all module testbenches and the full CPU test.
+
+```bash
+./test_cpu.sh
+```
+
+Compile and run the full CPU testbench.
 
 ## Tools
 
 * SystemVerilog
+* RISC-V RV32I
 * Icarus Verilog / VVP
 * Python
 * RISC-V assembler

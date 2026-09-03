@@ -1,2 +1,12 @@
 venv/*
-sim
+# Ignore simulation executables named "sim" anywhere
+**/sim
+
+# Ignore Verilog simulation output files anywhere
+**/*.vcd
+**/*.fst
+**/*.vvp
+**/*.out
+
+# macOS
+.DS_Store
