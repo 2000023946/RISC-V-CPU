@@ -5,6 +5,13 @@ module cpu(
 );
 
     // ============================================================
+    // STALL CONTROL
+    // ============================================================
+
+    logic stall;
+
+
+    // ============================================================
     // PC
     // ============================================================
 
@@ -14,15 +21,14 @@ module cpu(
     program_counter cpu_pc(
         .reset(reset),
         .clk(clk),
+        .stall(stall),
         .next_pc(next_pc),
         .pc(current_pc)
     );
 
 
     // ============================================================
-    // ============================================================
     // IF STAGE
-    // ============================================================
     // ============================================================
 
     logic [31:0] instruction;
@@ -52,6 +58,7 @@ module cpu(
     if_id_register cpu_if_id(
         .clk(clk),
         .reset(reset),
+        .stall(stall),
 
         .pc_in(current_pc),
         .instruction_in(instruction),
@@ -62,9 +69,7 @@ module cpu(
 
 
     // ============================================================
-    // ============================================================
     // ID STAGE
-    // ============================================================
     // ============================================================
 
     logic [4:0] rs1;
@@ -80,6 +85,10 @@ module cpu(
     logic [1:0] pc_mux_select;
     logic [1:0] writeback_select;
 
+
+    // ============================================================
+    // DECODER
+    // ============================================================
 
     decoder cpu_decoder(
         .instruction(if_id_instruction),
@@ -125,13 +134,12 @@ module cpu(
 
     logic [31:0] writeback_write_data;
 
-
-    // IMPORTANT:
-    // WB signals now come from MEM/WB instead of the
-    // instruction currently sitting in ID.
-
+    // MEM/WB destination register
     logic [4:0] mem_wb_rd;
+
+    // MEM/WB register write enable
     logic mem_wb_register_write_enable;
+
 
     register_file cpu_register_file(
         .clk(clk),
@@ -151,7 +159,7 @@ module cpu(
 
 
     // ============================================================
-    // ID/EX PIPELINE REGISTER
+    // ID/EX PIPELINE SIGNALS
     // ============================================================
 
     logic [31:0] id_ex_pc;
@@ -173,9 +181,49 @@ module cpu(
     logic [1:0] id_ex_writeback_select;
 
 
+    // ============================================================
+    // STALL / LOAD-USE HAZARD DETECTION
+    // ============================================================
+    //
+    // Current instruction:
+    //     rs1 / rs2
+    //
+    // Previous instruction in ID/EX:
+    //     id_ex_rd
+    //     id_ex_memory_op
+    //
+    // If the ID/EX instruction is a load and the current
+    // instruction needs the value being loaded:
+    //
+    //     stall = 1
+    //
+    // This causes:
+    //
+    //     PC      -> HOLD
+    //     IF/ID   -> HOLD
+    //     ID/EX   -> BUBBLE
+    //
+    // ============================================================
+
+    stall_unit cpu_stall_unit(
+        .rs1(rs1),
+        .rs2(rs2),
+
+        .id_ex_rd(id_ex_rd),
+        .id_ex_memory_op(id_ex_memory_op),
+
+        .stall(stall)
+    );
+
+
+    // ============================================================
+    // ID/EX PIPELINE REGISTER
+    // ============================================================
+
     id_ex_register cpu_id_ex(
         .clk(clk),
         .reset(reset),
+        .stall(stall),
 
         .pc_in(if_id_pc),
 
@@ -196,7 +244,6 @@ module cpu(
         .alu_mux_select_in(alu_mux_select),
         .pc_mux_select_in(pc_mux_select),
         .writeback_select_in(writeback_select),
-
 
         .pc_out(id_ex_pc),
 
@@ -221,9 +268,105 @@ module cpu(
 
 
     // ============================================================
-    // ============================================================
     // EX STAGE
     // ============================================================
+
+
+    // ============================================================
+    // EX/MEM SIGNALS
+    // ============================================================
+
+    logic [31:0] ex_mem_alu_result;
+    logic [31:0] ex_mem_register_value_2;
+
+    logic [4:0] ex_mem_rd;
+
+    logic [3:0] ex_mem_memory_op;
+    logic ex_mem_register_write_enable;
+    logic [1:0] ex_mem_writeback_select;
+
+
+    // ============================================================
+    // MEM/WB SIGNALS
+    // ============================================================
+
+    logic [31:0] mem_wb_alu_result;
+    logic [31:0] mem_wb_memory_data;
+
+    logic [1:0] mem_wb_writeback_select;
+
+
+    // ============================================================
+    // FORWARDING CONTROL
+    // ============================================================
+
+    logic [1:0] forward_a;
+    logic [1:0] forward_b;
+
+
+    forwarding_unit cpu_forwarding_unit(
+        .id_ex_rs1(id_ex_rs1),
+        .id_ex_rs2(id_ex_rs2),
+
+        .ex_mem_rd(ex_mem_rd),
+        .ex_mem_register_write_enable(
+            ex_mem_register_write_enable
+        ),
+
+        .mem_wb_rd(mem_wb_rd),
+        .mem_wb_register_write_enable(
+            mem_wb_register_write_enable
+        ),
+
+        .forward_a(forward_a),
+        .forward_b(forward_b)
+    );
+
+
+    // ============================================================
+    // FORWARDING MUX INPUTS
+    // ============================================================
+
+    logic [31:0] alu_a_forwarded;
+    logic [31:0] alu_b_register_forwarded;
+
+
+    // ============================================================
+    // ALU A FORWARDING MUX
+    // ============================================================
+
+    forwarding_mux cpu_forwarding_mux_a(
+        .register_value(id_ex_register_value_1),
+
+        .ex_mem_value(ex_mem_alu_result),
+
+        .mem_wb_value(writeback_write_data),
+
+        .forward_select(forward_a),
+
+        .selected_value(alu_a_forwarded)
+    );
+
+
+    // ============================================================
+    // ALU B FORWARDING MUX
+    // ============================================================
+
+    forwarding_mux cpu_forwarding_mux_b(
+        .register_value(id_ex_register_value_2),
+
+        .ex_mem_value(ex_mem_alu_result),
+
+        .mem_wb_value(writeback_write_data),
+
+        .forward_select(forward_b),
+
+        .selected_value(alu_b_register_forwarded)
+    );
+
+
+    // ============================================================
+    // ALU B MUX
     // ============================================================
 
     logic [31:0] alu_b;
@@ -231,7 +374,8 @@ module cpu(
 
 
     alu_mux cpu_alu_mux(
-        .rs2_value(id_ex_register_value_2),
+        .rs2_value(alu_b_register_forwarded),
+
         .immediate(id_ex_immediate),
 
         .select(id_ex_alu_mux_select),
@@ -240,8 +384,13 @@ module cpu(
     );
 
 
+    // ============================================================
+    // ALU
+    // ============================================================
+
     alu cpu_alu(
-        .a(id_ex_register_value_1),
+        .a(alu_a_forwarded),
+
         .b(alu_b),
 
         .op(id_ex_alu_op),
@@ -265,7 +414,7 @@ module cpu(
 
         .immediate(id_ex_immediate),
 
-        .rs1_value(id_ex_register_value_1),
+        .rs1_value(alu_a_forwarded),
 
         .pc_plus_4(pc_plus_4),
 
@@ -332,16 +481,6 @@ module cpu(
     // EX/MEM PIPELINE REGISTER
     // ============================================================
 
-    logic [31:0] ex_mem_alu_result;
-    logic [31:0] ex_mem_register_value_2;
-
-    logic [4:0] ex_mem_rd;
-
-    logic [3:0] ex_mem_memory_op;
-    logic ex_mem_register_write_enable;
-    logic [1:0] ex_mem_writeback_select;
-
-
     ex_mem_register cpu_ex_mem(
         .clk(clk),
         .reset(reset),
@@ -354,10 +493,13 @@ module cpu(
 
         .memory_op_in(id_ex_memory_op),
 
-        .register_write_enable_in(id_ex_register_write_enable),
+        .register_write_enable_in(
+            id_ex_register_write_enable
+        ),
 
-        .writeback_select_in(id_ex_writeback_select),
-
+        .writeback_select_in(
+            id_ex_writeback_select
+        ),
 
         .alu_result_out(ex_mem_alu_result),
 
@@ -367,16 +509,18 @@ module cpu(
 
         .memory_op_out(ex_mem_memory_op),
 
-        .register_write_enable_out(ex_mem_register_write_enable),
+        .register_write_enable_out(
+            ex_mem_register_write_enable
+        ),
 
-        .writeback_select_out(ex_mem_writeback_select)
+        .writeback_select_out(
+            ex_mem_writeback_select
+        )
     );
 
 
     // ============================================================
-    // ============================================================
     // MEM STAGE
-    // ============================================================
     // ============================================================
 
     logic [31:0] data_memory_read;
@@ -405,12 +549,6 @@ module cpu(
     // MEM/WB PIPELINE REGISTER
     // ============================================================
 
-    logic [31:0] mem_wb_alu_result;
-    logic [31:0] mem_wb_memory_data;
-
-    logic [1:0] mem_wb_writeback_select;
-
-
     mem_wb_register cpu_mem_wb(
         .clk(clk),
         .reset(reset),
@@ -421,10 +559,13 @@ module cpu(
 
         .rd_in(ex_mem_rd),
 
-        .register_write_enable_in(ex_mem_register_write_enable),
+        .register_write_enable_in(
+            ex_mem_register_write_enable
+        ),
 
-        .writeback_select_in(ex_mem_writeback_select),
-
+        .writeback_select_in(
+            ex_mem_writeback_select
+        ),
 
         .alu_result_out(mem_wb_alu_result),
 
@@ -432,16 +573,18 @@ module cpu(
 
         .rd_out(mem_wb_rd),
 
-        .register_write_enable_out(mem_wb_register_write_enable),
+        .register_write_enable_out(
+            mem_wb_register_write_enable
+        ),
 
-        .writeback_select_out(mem_wb_writeback_select)
+        .writeback_select_out(
+            mem_wb_writeback_select
+        )
     );
 
 
     // ============================================================
-    // ============================================================
     // WB STAGE
-    // ============================================================
     // ============================================================
 
     writeback_mux cpu_write_back_mux(

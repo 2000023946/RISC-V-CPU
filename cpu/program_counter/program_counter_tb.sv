@@ -1,161 +1,154 @@
+`timescale 1ns/1ps
 
 module program_counter_tb;
 
     logic clk;
     logic reset;
+    logic stall;
+
     logic [31:0] next_pc;
     logic [31:0] pc;
 
-
-    // ============================================================
-    // DUT
-    // ============================================================
-
-    program_counter dut(
+    program_counter dut (
         .clk(clk),
         .reset(reset),
+        .stall(stall),
         .next_pc(next_pc),
         .pc(pc)
     );
 
-
-    // ============================================================
-    // CLOCK
-    // ============================================================
-
-    initial begin
-        clk = 0;
-
-        forever #5 clk = ~clk;
-    end
-
-
-    // ============================================================
-    // TESTS
-    // ============================================================
+    // Clock: 10 ns period
+    always #5 clk = ~clk;
 
     initial begin
 
-        // --------------------------------------------------------
+        $display("========================================");
+        $display("PROGRAM COUNTER STALL TEST");
+        $display("========================================");
+
         // Initial values
-        // --------------------------------------------------------
+        clk     = 0;
+        reset   = 1;
+        stall   = 0;
+        next_pc = 32'h00000004;
 
-        reset = 1;
-        next_pc = 32'b0;
+        // Reset
+        #10;
 
+        if (pc != 32'h00000000) begin
+            $display("FAIL: Reset did not set PC to 0");
+            $finish;
+        end
 
-        // --------------------------------------------------------
-        // TEST 1: RESET
-        // --------------------------------------------------------
-
-        #2;
-
-        if (pc == 32'b0)
-            $display("RESET test PASSED");
-        else
-            $display("RESET test FAILED: pc = %h", pc);
+        $display("PASS: Reset sets PC to 0");
 
 
-        // --------------------------------------------------------
-        // TEST 2: Reset is applied on clock edge
-        // --------------------------------------------------------
+        // ------------------------------------------------
+        // TEST 1: Normal PC update
+        // ------------------------------------------------
 
-        #8;
-
-        if (pc == 32'b0)
-            $display("RESET CLOCK test PASSED");
-        else
-            $display("RESET CLOCK test FAILED: pc = %h", pc);
-
-
-        // --------------------------------------------------------
-        // Release reset
-        // --------------------------------------------------------
-
-        reset = 0;
-
-
-        // --------------------------------------------------------
-        // TEST 3: PC updates to next_pc
-        // --------------------------------------------------------
-
+        reset   = 0;
+        stall   = 0;
         next_pc = 32'h00000004;
 
         #10;
 
-        if (pc == 32'h00000004)
-            $display("PC = 4 test PASSED");
-        else
-            $display("PC = 4 test FAILED: pc = %h", pc);
+        if (pc != 32'h00000004) begin
+            $display("FAIL: PC did not update normally");
+            $display("Expected: 00000004");
+            $display("Actual:   %h", pc);
+            $finish;
+        end
+
+        $display("PASS: PC updates normally");
 
 
-        // --------------------------------------------------------
-        // TEST 4: PC updates again
-        // --------------------------------------------------------
+        // ------------------------------------------------
+        // TEST 2: Another normal update
+        // ------------------------------------------------
 
         next_pc = 32'h00000008;
 
         #10;
 
-        if (pc == 32'h00000008)
-            $display("PC = 8 test PASSED");
-        else
-            $display("PC = 8 test FAILED: pc = %h", pc);
+        if (pc != 32'h00000008) begin
+            $display("FAIL: PC did not update to 8");
+            $display("Expected: 00000008");
+            $display("Actual:   %h", pc);
+            $finish;
+        end
+
+        $display("PASS: PC updated to 8");
 
 
-        // --------------------------------------------------------
-        // TEST 5: PC updates to arbitrary address
-        // --------------------------------------------------------
+        // ------------------------------------------------
+        // TEST 3: Stall
+        // ------------------------------------------------
 
-        next_pc = 32'h00000100;
-
-        #10;
-
-        if (pc == 32'h00000100)
-            $display("PC = 0x100 test PASSED");
-        else
-            $display("PC = 0x100 test FAILED: pc = %h", pc);
-
-
-        // --------------------------------------------------------
-        // TEST 6: PC can hold a large address
-        // --------------------------------------------------------
-
-        next_pc = 32'hFFFF0000;
+        stall   = 1;
+        next_pc = 32'h0000000C;
 
         #10;
 
-        if (pc == 32'hFFFF0000)
-            $display("PC large address test PASSED");
-        else
-            $display("PC large address test FAILED: pc = %h", pc);
+        if (pc != 32'h00000008) begin
+            $display("FAIL: PC changed during stall");
+            $display("Expected: 00000008");
+            $display("Actual:   %h", pc);
+            $finish;
+        end
+
+        $display("PASS: PC holds during stall");
 
 
-        // --------------------------------------------------------
-        // TEST 7: Reset PC back to zero
-        // --------------------------------------------------------
+        // ------------------------------------------------
+        // TEST 4: Release stall
+        // ------------------------------------------------
 
-        reset = 1;
+        stall   = 0;
+        next_pc = 32'h0000000C;
 
         #10;
 
-        if (pc == 32'b0)
-            $display("RESET AGAIN test PASSED");
-        else
-            $display("RESET AGAIN test FAILED: pc = %h", pc);
+        if (pc != 32'h0000000C) begin
+            $display("FAIL: PC did not resume after stall");
+            $display("Expected: 0000000C");
+            $display("Actual:   %h", pc);
+            $finish;
+        end
+
+        $display("PASS: PC resumes after stall");
 
 
-        // --------------------------------------------------------
-        // Finish
-        // --------------------------------------------------------
+        // ------------------------------------------------
+        // TEST 5: Stall again
+        // ------------------------------------------------
 
-        $display("--------------------------------");
-        $display("ALL PROGRAM COUNTER TESTS COMPLETE");
-        $display("--------------------------------");
+        stall   = 1;
+        next_pc = 32'h00000010;
+
+        #10;
+
+        if (pc != 32'h0000000C) begin
+            $display("FAIL: PC changed during second stall");
+            $display("Expected: 0000000C");
+            $display("Actual:   %h", pc);
+            $finish;
+        end
+
+        $display("PASS: PC holds during second stall");
+
+
+        // ------------------------------------------------
+        // DONE
+        // ------------------------------------------------
+
+        $display("");
+        $display("========================================");
+        $display("ALL PROGRAM COUNTER STALL TESTS PASS");
+        $display("========================================");
 
         $finish;
 
     end
 
 endmodule
-

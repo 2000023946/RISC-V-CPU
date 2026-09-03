@@ -1,7 +1,7 @@
-
 module program_counter(
     input logic clk,
     input logic reset,
+    input logic stall,
 
     input logic [31:0] next_pc,
     output logic [31:0] pc
@@ -12,10 +12,11 @@ module program_counter(
         if (reset)
             pc <= 32'b0;
 
-        else
+        else if (!stall)
             pc <= next_pc;
+
+        // If stall = 1, hold the current PC
 
     end
 
 endmodule
-

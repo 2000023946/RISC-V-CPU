@@ -1,6 +1,7 @@
 module id_ex_register(
     input logic        clk,
     input logic        reset,
+    input logic        stall,
 
     // Data from ID stage
     input logic [31:0] pc_in,
@@ -43,7 +44,11 @@ module id_ex_register(
     output logic [1:0] writeback_select_out
 );
 
+    // Memory operation encoding
+    localparam logic [3:0] MEM_NONE = 4'd8;
+
     always_ff @(posedge clk) begin
+
         if (reset) begin
 
             pc_out                    <= 32'b0;
@@ -56,7 +61,7 @@ module id_ex_register(
             rd_out                    <= 5'b0;
 
             alu_op_out                <= 4'b0;
-            memory_op_out             <= 4'b0;
+            memory_op_out             <= MEM_NONE;
             branch_type_out           <= 3'b0;
 
             register_write_enable_out <= 1'b0;
@@ -65,7 +70,34 @@ module id_ex_register(
             writeback_select_out      <= 2'b0;
 
         end
+
+        else if (stall) begin
+
+            // Insert a bubble into ID/EX
+
+            pc_out                    <= 32'b0;
+            register_value_1_out      <= 32'b0;
+            register_value_2_out      <= 32'b0;
+            immediate_out             <= 32'b0;
+
+            rs1_out                   <= 5'b0;
+            rs2_out                   <= 5'b0;
+            rd_out                    <= 5'b0;
+
+            alu_op_out                <= 4'b0;
+            memory_op_out             <= MEM_NONE;
+            branch_type_out           <= 3'b0;
+
+            register_write_enable_out <= 1'b0;
+            alu_mux_select_out        <= 1'b0;
+            pc_mux_select_out         <= 2'b0;
+            writeback_select_out      <= 2'b0;
+
+        end
+
         else begin
+
+            // Normal operation: capture ID stage
 
             pc_out                    <= pc_in;
             register_value_1_out      <= register_value_1_in;
@@ -86,6 +118,7 @@ module id_ex_register(
             writeback_select_out      <= writeback_select_in;
 
         end
+
     end
 
 endmodule

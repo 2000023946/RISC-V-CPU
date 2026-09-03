@@ -10,3 +10,6 @@ venv/*
 
 # macOS
 .DS_Store
+
+# program
+program.mem
